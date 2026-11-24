@@ -16,16 +16,20 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const text = readFileSync(join(here, "entry.txt"), "utf8");
 
+// The two valid choices, named so the mapping lives in one place.
+const CHOICES = { A: "coffee", B: "tea" } as const;
+type Choice = keyof typeof CHOICES;
+
 // Gate (mirrors the competition gate): exactly one character, A or B.
 // Centralised here so the check lives in one place.
-function validateEntry(raw: string): string {
+function validateEntry(raw: string): Choice {
   const trimmed = raw.trim();
-  if (trimmed.length !== 1 || (trimmed !== "A" && trimmed !== "B")) {
+  if (trimmed.length !== 1 || !(trimmed in CHOICES)) {
     throw new Error(
-      `entry must be exactly one letter (A or B), got ${JSON.stringify(trimmed)}`,
+      `entry must be exactly one letter (${Object.keys(CHOICES).join(" or ")}), got ${JSON.stringify(trimmed)}`,
     );
   }
-  return trimmed;
+  return trimmed as Choice;
 }
 
 const letter = validateEntry(text);
@@ -34,5 +38,11 @@ const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
 mkdirSync(outDir, { recursive: true });
 // Write the validated letter bytes exactly: no added trailing newline,
 // so the graded file is byte-identical to the validated source.
-writeFileSync(join(outDir, "entry.txt"), letter, "utf8");
-console.log("entry: " + letter);
+const outPath = join(outDir, "entry.txt");
+writeFileSync(outPath, letter, "utf8");
+// Post-write check: the graded file must be byte-identical to the
+// validated letter, otherwise fail loudly instead of submitting junk.
+if (readFileSync(outPath, "utf8") !== letter) {
+  throw new Error(`wrote ${JSON.stringify(letter)} but ${outPath} differs`);
+}
+console.log(`entry: ${letter} (${CHOICES[letter]})`);
